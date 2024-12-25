@@ -1,0 +1,4 @@
+Flask           # Flask web framework
+pandas           # Data processing and manipulation
+openpyxl          # For reading Excel files
+scikit-learn    # Machine learning library
