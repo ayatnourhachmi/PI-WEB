@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template
 from .utils import REGION_MAPPING, filter_data, calculate_averages, convert_currency_to_avg, predict_region  # Import functions from utils
 import pandas as pd
+import os
 
 # Create Flask Blueprint
 routes = Blueprint('routes', __name__)
@@ -40,8 +41,19 @@ def display_results():
         # Log the region name and family status for context
         print(f"[INFO] Processing for region: {region_name}, family status: {family_status}")
 
-        # Load the dataset
-        data = pd.read_excel('/backend/data/updated_responses.xlsx')
+        import os
+
+        # Resolve the path relative to the backend directory
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # Go up one level from app
+        file_path = os.path.join(base_dir, 'data', 'updated_responses.xlsx')
+
+        # Check if the file exists
+        print("Resolved file path:", file_path)
+        print("File exists:", os.path.exists(file_path))
+
+
+        data = pd.read_excel(file_path)
+
 
         # Nettoyage et standardisation des colonnes
         data.columns = data.columns.str.strip()  # Supprime les espaces inutiles dans les noms de colonnes
@@ -88,27 +100,21 @@ def display_results():
 
 @routes.route('/display_results_byMiniForm', methods=['GET'])
 def display_results_byMiniForm():
-    """Flask route to handle region prediction based on salary and family status inputs."""
-
+    """Route to predict the region based on salary and family status."""
     try:
-        # Retrieve inputs from the request (query parameters)
+        # Retrieve inputs from the request
         salary = request.args.get('salary', type=float)
         family_status = request.args.get('family_status', type=str)
 
         # Validate inputs
         if salary is None:
-            return jsonify({
-                "error": "Invalid input: Salary is required and must be a number."
-            }), 400
+            return jsonify({"error": "Invalid input: Salary is required and must be a number."}), 400
 
         if family_status not in ['Single', 'Married']:
-            return jsonify({
-                "error": "Invalid input: Family status must be 'Single' or 'Married'."
-            }), 400
+            return jsonify({"error": "Invalid input: Family status must be 'Single' or 'Married'."}), 400
 
-        # Predict the region using the utility function
+        # Call the prediction function
         region = predict_region(salary, family_status)
-        print(f"[INFO] Predicted region: {region}")
 
         # Return the predicted region
         return jsonify({
@@ -118,7 +124,5 @@ def display_results_byMiniForm():
         }), 200
 
     except Exception as e:
-        print(f"[ERROR] {str(e)}")  # Debugging logs
-        return jsonify({
-            "error": f"An error occurred: {str(e)}"
-        }), 500
+        print(f"[ERROR] {str(e)}")
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500

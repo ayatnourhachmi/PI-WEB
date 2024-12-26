@@ -15,68 +15,22 @@ function setFamilyStatus(status) {
     }
 }
 
-// Function to display results
-function displayResults(data) {
-    const resultsContainer = document.getElementById('results');
-
-    if (!data.averages || Object.keys(data.averages).length === 0) {
-        resultsContainer.textContent = 'No data available for this selection.';
-        return;
-    }
-
-    const { message, averages } = data;
-
-    // Create the message element
-    const messageElement = document.createElement('p');
-    messageElement.textContent = message;
-
-    // Create a list of averages
-    const averagesList = document.createElement('ul');
-    for (const [key, value] of Object.entries(averages)) {
-        const listItem = document.createElement('li');
-        listItem.textContent = `${key}: ${value.toFixed(2)} DH`;
-        averagesList.appendChild(listItem);
-    }
-
-    // Clear the container and append new content
-    resultsContainer.innerHTML = ''; // Clear previous content
-    resultsContainer.appendChild(messageElement);
-    resultsContainer.appendChild(averagesList);
-}
-
-// Function to fetch results for a region
-async function fetchRegionResults(regionId) {
-    const resultsContainer = document.getElementById('results');
-    resultsContainer.textContent = 'Loading...';
-
-    try {
-        // Fetch data from the backend
-        const response = await fetch('/display_results', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ region: regionId, family_status: currentStatus }),
-        });
-
-        if (!response.ok) {
-            console.error(`[ERROR] Server responded with status ${response.status}`);
-            resultsContainer.textContent = 'Error fetching results. Please try again.';
-            return;
-        }
-
-        const data = await response.json();
-        displayResults(data); // Call the display function
-    } catch (error) {
-        console.error('[ERROR] Fetch failed:', error);
-        resultsContainer.textContent = 'An error occurred. Please try again.';
-    }
-}
+const ICONS = [
+    '/static/images/1.svg',
+    '/static/images/2.svg',
+    '/static/images/3.svg',
+    '/static/images/4.svg',
+    '/static/images/5.svg',
+];
 
 // Function to handle region clicks
-function handleRegionClick(event) {
+async function handleRegionClick(event) {
     const regionId = event.target.id; // Get the ID of the clicked region
     currentRegionId = regionId; // Store the currently selected region
 
-    // Set the fill color of all paths back to default
+    console.log('[INFO] Region clicked. Region ID:', regionId);
+
+    // Reset the fill color of all paths
     document.querySelectorAll('path').forEach((path) => {
         path.style.fill = '#a7f3d0'; // Default color
     });
@@ -89,61 +43,216 @@ function handleRegionClick(event) {
     // Highlight the clicked region
     event.target.style.fill = '#047857'; // Highlighted color for clicked region
 
-    // Fetch results for the clicked region
-    fetchRegionResults(regionId);
+    // Fetch and display results for the clicked region
+    console.log('[INFO] Fetching results...');
+    await fetchRegionResults(regionId);
 }
 
-// Function to predict region based on salary and family status
-async function predictRegion(salary, familyStatus) {
-    try {
-        // Construct the API URL
-        const apiUrl = `/display_results_byMiniForm?salary=${encodeURIComponent(salary)}&family_status=${encodeURIComponent(familyStatus)}`;
+// Function to render results dynamically
+function renderResults(data) {
+    console.log('[INFO] Rendering results:', data);
 
-        // Fetch the data
-        const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-        });
+    if (!data || !data.averages || Object.keys(data.averages).length === 0) {
+        return `
+            <p class="text-red-600 font-medium">No data available for this selection.</p>
+        `;
+    }
 
-        const data = await response.json();
+    const { message, averages } = data;
 
-        if (!response.ok) {
-            throw new Error(data.error || 'An error occurred while predicting the region.');
+    // Ensure "Average Total Monthly Expenses (DH)" is last
+    const sortedAverages = Object.entries(averages).sort(([keyA], [keyB]) => {
+        if (keyA === "Average Total Monthly Expenses (DH)") return 1; // Place at the end
+        if (keyB === "Average Total Monthly Expenses (DH)") return -1; 
+        return 0; // Maintain order for other items
+    });
+
+    // Build the result items with icons
+    const resultItems = sortedAverages.map(([key, value], index) => {
+        const iconPath = ICONS[index % ICONS.length]; // Use icons in order or cycle if more items
+
+        // Apply special styling for "Average Total Monthly Expenses (DH)"
+        if (key === "Average Total Monthly Expenses (DH)") {
+            return `
+                <li class="flex items-center text-gray-700 font-medium">
+                    <img src="${iconPath}" alt="${key} Icon" class="w-6 h-6 mr-2"> <!-- Larger Icon -->
+                    <span class="text-lg text-emerald-700">${key}</span> <!-- Larger and bolder text -->
+                    <span class="ml-auto text-lg font-bold text-emerald-700">${value.toFixed(2)} DH</span> <!-- Larger and bolder value -->
+                </li>
+            `;
         }
 
-        return data; // Return the prediction
+        // Default styling for other items
+        return `
+            <li class="flex items-center text-gray-700 font-medium">
+                <img src="${iconPath}" alt="${key} Icon" class="w-6 h-6 mr-2">
+                <span>${key}</span>
+                <span class="ml-auto font-semibold text-gray-800">${value.toFixed(2)} DH</span>
+            </li>
+        `;
+    }).join('');
+
+    return `
+        <p class="text-gray-600 font-semibold mb-4 text-lg">${message}</p>
+        <ul class="space-y-3">
+            ${resultItems}
+        </ul>
+    `;
+}
+
+
+// Function to fetch results for a region
+async function fetchRegionResults(regionId) {
+    console.log('[INFO] Fetching results for region ID:', regionId);
+
+    const resultContainer = document.getElementById('result-container');
+    resultContainer.innerHTML = '<p class="text-gray-600">Loading...</p>';
+
+    try {
+        const response = await fetch('/display_results', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ region: regionId, family_status: currentStatus }),
+        });
+
+        if (!response.ok) {
+            console.error(`[ERROR] Server responded with status ${response.status}`);
+            resultContainer.innerHTML = '<p class="text-red-600">Error fetching results. Please try again.</p>';
+            return;
+        }
+
+        const data = await response.json();
+        console.log('[INFO] Data received:', data);
+
+        // Render the results dynamically
+        resultContainer.innerHTML = renderResults(data);
     } catch (error) {
-        console.error('[ERROR] Prediction failed:', error.message);
-        throw error;
+        console.error('[ERROR] Fetch failed:', error);
+        resultContainer.innerHTML = '<p class="text-red-600">An error occurred. Please try again.</p>';
     }
 }
+
+// Attach event listeners to SVG paths
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('[INFO] DOM fully loaded. Attaching event listeners.');
+    document.querySelectorAll('svg path').forEach((path) => {
+        path.addEventListener('click', handleRegionClick);
+    });
+
+    // Initialize the results container with a prompt
+    const resultContainer = document.getElementById('result-container');
+    if (resultContainer) {
+        resultContainer.innerHTML = `
+            <p class="text-gray-600 font-medium">Click on a region to display results.</p>
+        `;
+    }
+});
+
+
 
 // Function to handle "Predict" button click
 async function handlePredictButtonClick() {
     const salaryInput = document.getElementById('salaryInput');
     const salary = parseFloat(salaryInput.value);
+    const familyStatusSelect = document.getElementById('familyStatusSelect');
+    const familyStatus = familyStatusSelect.value;
 
+    // Validate inputs
     if (isNaN(salary)) {
         alert('Please enter a valid salary.');
         return;
     }
 
-    try {
-        const prediction = await predictRegion(salary, currentStatus);
+    if (!['Single', 'Married'].includes(familyStatus)) {
+        alert('Please select a valid family status.');
+        return;
+    }
 
-        // Update the UI with the prediction
+    try {
+        // Call the backend API
+        const response = await fetch(`/display_results_byMiniForm?salary=${salary}&family_status=${familyStatus}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error);
+        }
+
+        // Parse the response JSON
+        const prediction = await response.json();
+
+        // Define region images
+        const REGION_IMAGES = {
+            "Tanger-Tétouan-Al Hoceima": "static/images/tanger.jpg",
+            "L’Oriental": "static/images/oujda.jpg",
+            "Fès-Meknès": "static/images/taza.jpg",
+            "Rabat-Salé-Kénitra": "static/images/rabat.jpg",
+            "Béni Mellal-Khénifra": "static/images/benimelal.jpg",
+            "Casablanca-Settat": "static/images/casa.jpg",
+            "Marrakech-Safi": "static/images/kech.jpg",
+            "Drâa-Tafilalet": "static/images/zagoura.jpg",
+            "Souss-Massa": "static/images/agadir.jpg",
+            "Guelmim-Oued Noun": "static/images/guelmim.jpg",
+            "Laâyoune-Sakia Al Hamra": "static/images/laayoune.jpg",
+            "Dakhla-Oued Eddahab": "static/images/dakhla.jpg",
+        };
+
+        // Get the image for the predicted region
+        const regionImage = REGION_IMAGES[prediction.predicted_region];
+
+        // Update the UI with the predicted region as an image
         const predictionContainer = document.getElementById('predictionResult');
-        predictionContainer.textContent = `Predicted Region: ${prediction.predicted_region}`;
+        predictionContainer.innerHTML = `
+            <div class="relative">
+                <img src="${regionImage}" alt="${prediction.predicted_region}" class="w-full h-64 object-cover rounded-md">
+                <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-md">
+                    <span class="text-white text-2xl font-bold">${prediction.predicted_region}</span>
+                </div>
+            </div>
+        `;
+
+        // Scroll to the results section
+        const resultContainer = document.getElementById('predictionResult');
+        resultContainer.scrollIntoView({ behavior: 'smooth' });
+
     } catch (error) {
+        // Handle errors
         const predictionContainer = document.getElementById('predictionResult');
-        predictionContainer.textContent = `Error: ${error.message}`;
+        predictionContainer.innerHTML = `
+            <h2 class="text-lg font-bold text-center text-red-600">Error:</h2>
+            <p class="text-center">${error.message}</p>
+        `;
+
+        // Scroll to the results section (optional for error visibility)
+        const resultContainer = document.getElementById('result-container');
+        resultContainer.scrollIntoView({ behavior: 'smooth' });
     }
 }
 
-// Attach event listeners to SVG paths
-document.querySelectorAll('svg path').forEach((path) => {
-    path.addEventListener('click', handleRegionClick);
-});
-
 // Attach event listener to Predict button
 document.getElementById('predictButton').addEventListener('click', handlePredictButtonClick);
+
+
+
+function toggleMenu() {
+    const menu = document.getElementById('menu-links');
+    const overlay = document.getElementById('menu-overlay');
+    if (menu.classList.contains('-translate-x-full')) {
+      menu.classList.remove('-translate-x-full');
+      menu.classList.add('translate-x-0');
+      overlay.classList.remove('hidden');
+      overlay.classList.add('block');
+    } else {
+      menu.classList.add('-translate-x-full');
+      menu.classList.remove('translate-x-0');
+      overlay.classList.remove('block');
+      overlay.classList.add('hidden');
+    }
+  }
+
+  function closeMenu() {
+    const menu = document.getElementById('menu-links');
+    const overlay = document.getElementById('menu-overlay');
+    menu.classList.add('-translate-x-full');
+    menu.classList.remove('translate-x-0');
+    overlay.classList.remove('block');
+    overlay.classList.add('hidden');
+  }

@@ -20,40 +20,80 @@ REGION_MAPPING = {
     12: "Dakhla-Oued Eddahab",
 }
 
+def clean_family_status(family_status):
+    mapping = {
+        'Marié': 'Married',
+        'Mariée': 'Married',
+        'Célibataire': 'Single',
+        'Divorcé': 'Single',
+        'Divorcée': 'Single'
+    }
+    return mapping.get(family_status.strip().title(), 'Other')  # Default to 'Other'
 
-# Fonction pour prédire la région en fonction du salaire et du statut familial
+
+
 def predict_region(salaire, family_status):
+
     """
-    Prédit la région la plus adaptée en fonction du salaire et du statut familial.
+    Predict the most suitable region based on salary and family status.
     """
-    # Load the dataset
-    data = pd.read_excel('./data/updated_responses.xlsx')
-    
-    # Conversion des colonnes pertinentes en valeurs numériques
-    data['Salaire (DH)'] = data['Salaire (DH)'].apply(convert_currency_to_avg)
+    try:
+        # Load the dataset
+        data = pd.read_excel('./data/updated_responses.xlsx')
 
-    # Suppression des lignes avec des valeurs manquantes dans les colonnes nécessaires
-    data = data.dropna(subset=['Salaire (DH)', 'Région', 'Family status'])
+        # Debug: Print column names
+        print("Columns in the dataset:", data.columns.tolist())
 
-    # Encodage du statut familial (catégorique) en valeurs numériques
-    label_encoder = LabelEncoder()
-    data['Family status encoded'] = label_encoder.fit_transform(data['Family status'])
+        # Ensure the necessary columns exist
+        required_columns = ['Salaire (DH)', 'Région', 'Situation Familiale']
+        for col in required_columns:
+            if col not in data.columns:
+                raise ValueError(f"Missing required column: {col}")
 
-    # Préparation des données pour le modèle
-    features = data[['Salaire (DH)', 'Family status encoded']]  # Salaire et statut familial comme variables explicatives
-    target = data['Région']  # Région comme variable cible
+        # Debug: Check for missing values
+        print("Missing values in required columns:", data[required_columns].isnull().sum())
 
-    # Diviser les données en ensembles d'entraînement et de test
-    X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.3, random_state=42)
+        # Handle missing values
+        data = data.dropna(subset=required_columns)
 
-    # Entraîner le modèle QDA
-    qda = QuadraticDiscriminantAnalysis()
-    qda.fit(X_train, y_train)
+        # Clean the 'Situation Familiale' column
+        data['Situation Familiale'] = data['Situation Familiale'].apply(clean_family_status)
 
-    family_status_encoded = label_encoder.transform([family_status])[0]  # Encode le statut familial
-    input_data = np.array([[salaire, family_status_encoded]])  # Convertir les données en tableau 2D
-    predicted_region = qda.predict(input_data)
-    return predicted_region[0]
+        # Normalize input for family status
+        family_status = clean_family_status(family_status)  # Clean the input as well
+
+        # Convert salary to numeric
+        data['Salaire (DH)'] = data['Salaire (DH)'].apply(convert_currency_to_avg)
+
+        # Encode categorical family status
+        label_encoder = LabelEncoder()
+        data['Family Status Encoded'] = label_encoder.fit_transform(data['Situation Familiale'])
+
+        # Prepare features and target
+        features = data[['Salaire (DH)', 'Family Status Encoded']]
+        target = data['Région']
+
+        print(data.head())  # Debug: Print the first few rows after cleaning
+
+        # Split data into train and test sets
+        X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.3, random_state=42)
+
+        # Train a QDA model
+        qda = QuadraticDiscriminantAnalysis()
+        qda.fit(X_train, y_train)
+
+        # Encode the input family status
+        family_status_encoded = label_encoder.transform([family_status])[0]
+
+        # Predict the region
+        input_data = np.array([[salaire, family_status_encoded]])
+        predicted_region = qda.predict(input_data)
+
+        return predicted_region[0]
+
+    except Exception as e:
+        print(f"[ERROR] {str(e)}")
+        raise
 
 # Fonction pour convertir les valeurs monétaires en moyenne (gestion des plages de valeurs et des caractères non numériques)
 def convert_currency_to_avg(value):
