@@ -1,17 +1,64 @@
 from flask import Blueprint, request, jsonify, render_template
-from .utils import REGION_MAPPING, filter_data, calculate_averages, convert_currency_to_avg, predict_region  # Import functions from utils
+from .utils import REGION_MAPPING, filter_data, calculate_averages, convert_currency_to_avg, predict_region, predict_expenses, setup_model  # Import functions from utils
 import pandas as pd
+import numpy as np
 import os
 
 # Create Flask Blueprint
 routes = Blueprint('routes', __name__)
+
+# Initialize the model at startup
+MODEL = setup_model()
 
 @routes.route('/')
 def home():
     """
     Root route to serve the index.html file.
     """
-    return render_template('index.html')  # Ensure 'index.html' is in the templates folder
+    return render_template('index.html')
+
+@routes.route('/budgetPlanningTool', methods=['GET', 'POST'])
+def budget_planning_tool_route():
+    """
+    Route to handle the budget planning tool form submission and rendering.
+    """
+    return render_template('budgetPTool.html')
+
+
+@routes.route('/submit', methods=['POST'])
+def submit():
+    if not MODEL:
+        return jsonify({"error": "Model not loaded"}), 500
+
+    try:
+        # Get form inputs
+        salary = float(request.form['salary'])
+        region = request.form['region']
+        family_status = request.form['family_status']
+        target_percentage = float(request.form['savings'].replace('%', ''))
+
+        # Spending preferences
+        preference_mapping = {"high": 1.5, "medium": 1.0, "low": 0.5}
+        spending_preferences = np.array([
+            preference_mapping.get(request.form['rent'].lower(), 1.0),
+            preference_mapping.get(request.form['utilities'].lower(), 1.0),
+            preference_mapping.get(request.form['transport'].lower(), 1.0),
+            preference_mapping.get(request.form['food'].lower(), 1.0)
+        ])
+
+        # Predict expenses
+        expenses, remaining_balance = predict_expenses(
+            MODEL, salary, region, family_status, target_percentage, spending_preferences
+        )
+
+        # Return the results as JSON
+        return jsonify({
+            "expenses": dict(zip(['Rent', 'Utilities', 'Transport', 'Food'], map(lambda x: round(x, 2), expenses))),
+            "total_expenses": round(sum(expenses), 2),
+            "remaining_balance": round(remaining_balance, 2)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @routes.route('/display_results', methods=['POST'])
 def display_results():

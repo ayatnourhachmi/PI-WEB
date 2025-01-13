@@ -2,6 +2,11 @@ import pandas as pd
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 import numpy as np
 
 # Region mapping (ID to Name)
@@ -126,6 +131,7 @@ def filter_data(data, region, family_status):
 
 # Function to calculate averages
 def calculate_averages(filtered_data):
+
     """
     Calculates averages for the relevant columns.
     """
@@ -141,3 +147,151 @@ def calculate_averages(filtered_data):
     }
 
     return averages
+
+
+def predict_expenses(model, salary, region, family_status, target_percentage, spending_preferences):
+    """
+    Predicts expenses for each category and adjusts them to meet the user's target remaining balance
+    and spending preferences.
+
+    Args:
+        model: Trained model pipeline for predicting expenses.
+        salary: User's monthly salary (in DH).
+        region: User's region as a string.
+        family_status: User's family status (Single/Married).
+        target_percentage: Percentage of salary the user wants to save as remaining balance.
+        spending_preferences: Array of spending preference weights (1.5 for High, 1.0 for Medium, 0.5 for Low).
+
+    Returns:
+        adjusted_expenses: Array of adjusted predicted expenses for each category.
+        final_remaining_balance: Remaining balance after adjusting expenses.
+    """
+    # Encode user inputs as a DataFrame
+    input_data = pd.DataFrame({
+        'Salaire (DH)': [salary],
+        'Région': [region],
+        'Family status': [family_status]
+    })
+
+    # Predict expenses using the trained model
+    predicted_expenses = model.predict(input_data)[0]  # Returns a single row of predictions
+
+    # Apply user-defined spending preferences to the predicted expenses
+    adjusted_expenses = predicted_expenses * spending_preferences
+
+    # Calculate the total predicted expenses and the user's target remaining balance
+    total_expenses = sum(adjusted_expenses)
+    target_remaining_balance = salary * (target_percentage / 100)
+    max_expenses = salary - target_remaining_balance
+
+    # Adjust expenses proportionally if they exceed the allowable budget
+    if total_expenses > max_expenses:
+        adjustment_factor = max_expenses / total_expenses
+        adjusted_expenses = adjusted_expenses * adjustment_factor
+
+    # Calculate the final remaining balance after expenses
+    final_remaining_balance = salary - sum(adjusted_expenses)
+
+    # Return adjusted expenses and final remaining balance
+    return adjusted_expenses, final_remaining_balance
+
+def setup_model(file_path='./data/updated_responses.xlsx'):
+    """
+    Loads the dataset, preprocesses it, and trains the model.
+
+    Args:
+        file_path: Path to the dataset file.
+
+    Returns:
+        A trained machine learning model pipeline, or None if an error occurs.
+    """
+    try:
+        # Load the dataset
+        data = pd.read_excel('./data/updated_responses.xlsx')
+
+        if data is None:
+            raise ValueError("Failed to load data. Check the file path or data format.")
+
+        # Preprocess the dataset
+        processed_data = preprocess_data(data)
+
+        # Train the model
+        model = train_model(processed_data)
+
+        return model
+    except Exception as e:
+        print(f"Error setting up the model: {e}")
+        return None
+
+def train_model(data):
+    """
+    Trains a Linear Regression model to predict expenses based on user inputs.
+    """
+    # Features and target
+    X = data[['Salaire (DH)', 'Région', 'Family status']]
+    y = data[['Loyer (DH)', 'Factures Mensuelles (DH)', 'Perte Mensuelle Transport (DH)', 'Dépenses Alimentaires (DH)']]
+
+    # Preprocessing pipeline
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', StandardScaler(), ['Salaire (DH)']),
+            ('cat', OneHotEncoder(), ['Région', 'Family status'])
+        ]
+    )
+
+    # Regression model
+    model = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('regressor', LinearRegression())
+    ])
+
+    # Train-test split
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Train the model
+    model.fit(X_train, y_train)
+
+    return model
+
+
+def preprocess_data(data):
+    """
+    Preprocesses the dataset by handling non-numeric values, encoding categorical variables,
+    and normalizing numerical features.
+    """
+    # Handle non-numeric values in relevant columns
+    def convert_to_numeric(value):
+        """
+        Converts a string value with ranges or non-numeric characters into a numeric value.
+        Handles cases like '5000-10000DH', 'Moins de 500 dh', 'Plus de 2500 dh', '0 dh'.
+        """
+        if isinstance(value, str):
+            value = value.lower().replace('dh', '').strip()  # Remove 'DH' and extra spaces
+            if 'plus de' in value:
+                return float(value.replace('plus de', '').strip())
+            elif 'moins de' in value:
+                return float(value.replace('moins de', '').strip())
+            elif '-' in value:  # Handle ranges like '5000-10000'
+                low, high = map(float, value.split('-'))
+                return (low + high) / 2
+            try:
+                return float(value)  # Convert to float if possible
+            except ValueError:
+                return np.nan  # Return NaN if conversion fails
+        return value  # Return the value as is if it's already numeric
+
+    # Apply the conversion function to relevant columns
+    columns_to_convert = ['Salaire (DH)', 'Factures Mensuelles (DH)', 'Dépenses Alimentaires (DH)',
+                          'Loyer (DH)', 'Perte Mensuelle Transport (DH)']  # Add other relevant columns
+    for col in columns_to_convert:
+        data[col] = data[col].apply(convert_to_numeric)
+
+    # Handle missing values (e.g., replace NaN with 0 or column mean)
+    data.fillna(0, inplace=True)
+
+    # Encode categorical variables
+    data['Family status'] = data['Situation Familiale'].replace({
+        'Divorcé': 'Single', 'Célibataire': 'Single', 'Marié': 'Married', 'Celibataire': 'Single'
+    })
+
+    return data

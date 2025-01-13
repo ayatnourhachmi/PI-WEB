@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expense Prediction Tool</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-image: url('../static/images/bg.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center">
+  <div class="bg-white bg-opacity-90 p-8 rounded-lg shadow-lg w-full max-w-xl">
+    <a href="" class="text-2xl font-bold text-gray-800">
+        <img class="w-12 h-12 mx-auto mb-4" src="{{ url_for('static', filename='images/maroc.png') }}" alt="Logo">
+      </a>
+    <h1 id="title" class="text-2xl font-bold text-center mb-6">Expense Prediction Tool</h1>
+    <!-- Form Section -->
+    <div id="form-section">
+      <form id="predictionForm" method="POST" class="space-y-6" action="/submit">
+        <div class="space-y-4">
+          <!-- Monthly Salary -->
+          <div>
+            <label for="salary" class="block text-gray-700 font-medium">Enter your monthly salary (in DH):</label>
+            <input id="salary" name="salary" type="number" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500" required>
+          </div>
+
+          <!-- Region -->
+          <div>
+            <label for="region" class="block text-gray-700 font-medium">Enter your region:</label>
+            <select id="region" name="region" class="border border-gray-300 mt-1 block w-full px-4 py-2 pr-10 bg-white rounded-lg focus:ring-emerald-500 focus:border-emerald-500" required>
+              <option value="Casablanca-Settat">Casablanca-Settat</option>
+              <option value="Rabat-Salé-Kénitra">Rabat-Salé-Kénitra</option>
+              <option value="Marrakech-Safi">Marrakech-Safi</option>
+              <option value="Fès-Meknès">Fès-Meknès</option>
+              <option value="Tanger-Tétouan-Al Hoceima">Tanger-Tétouan-Al Hoceima</option>
+              <option value="Souss-Massa">Souss-Massa</option>
+              <option value="L’Oriental">L’Oriental</option>
+              <option value="Béni Mellal-Khénifra">Béni Mellal-Khénifra</option>
+              <option value="Drâa-Tafilalet">Drâa-Tafilalet</option>
+              <option value="Laâyoune-Sakia Al Hamra">Laâyoune-Sakia Al Hamra</option>
+              <option value="Dakhla-Oued Eddahab">Dakhla-Oued Eddahab</option>
+              <option value="Guelmim-Oued Noun">Guelmim-Oued Noun</option>
+            </select>
+          </div>
+
+          <!-- Family Status -->
+          <div>
+            <label for="family_status" class="block text-gray-700 font-medium">Enter your family status (Single/Married):</label>
+            <select id="family_status" name="family_status" class="mt-1 block w-full px-4 py-2 border border-gray-300 bg-white rounded-lg focus:ring-emerald-500 focus:border-emerald-500" required>
+              <option value="Single">Single</option>
+              <option value="Married">Married</option>
+            </select>
+          </div>
+
+          <!-- Savings Percentage -->
+          <div>
+            <label for="savings" class="block text-gray-700 font-medium">Enter the percentage of your salary you want to save as remaining balance:</label>
+            <select id="savings" name="savings" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-emerald-500 focus:border-emerald-500" required>
+              <option value="0">0%</option>
+              <option value="5">5%</option>
+              <option value="10">10%</option>
+              <option value="25">25%</option>
+              <option value="50">50%</option>
+              <option value="75">75%</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Spending Preferences -->
+        <div>
+          <p class="block text-gray-700 font-medium mb-2">Enter your spending preferences for the following categories:</p>
+          <div class="grid grid-cols-4 gap-4">
+            <div>
+              <label for="rent" class="block text-gray-700 text-sm">Rent:</label>
+              <select id="rent" name="rent" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-emerald-500 focus:border-emerald-500" required>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div>
+              <label for="utilities" class="block text-gray-700 text-sm">Utilities:</label>
+              <select id="utilities" name="utilities" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-emerald-500 focus:border-emerald-500" required>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div>
+              <label for="transport" class="block text-gray-700 text-sm">Transport:</label>
+              <select id="transport" name="transport" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-emerald-500 focus:border-emerald-500" required>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div>
+              <label for="food" class="block text-gray-700 text-sm">Food:</label>
+              <select id="food" name="food" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-emerald-500 focus:border-emerald-500" required>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="text-center">
+          <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white py-2 px-4 rounded-lg focus:ring-4 focus:ring-emerald-300">
+            Submit
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Results Section -->
+    <div id="results-section" class="hidden pl-6">
+      <h3 class="text-lg font-bold mb-4">Predicted Monthly Expenses</h3>
+      <ul id="expense-list" class="list-disc pl-4 mb-4"></ul>
+      <p id="total-expenses" class="text-gray-700 font-medium"></p>
+      <p id="remaining-balance" class="text-gray-700 font-medium"></p>
+      <button onclick="reloadForm()" class="mt-4 bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700">
+        Reset Form
+      </button>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('predictionForm').addEventListener('submit', async function (event) {
+      event.preventDefault();
+
+      const formData = new FormData(this);
+      const response = await fetch('/submit', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Hide the form and display results
+        document.getElementById('form-section').classList.add('hidden');
+        document.getElementById('title').classList.add('hidden');
+        document.getElementById('results-section').classList.remove('hidden');
+
+        // Populate results
+        const expenseList = document.getElementById('expense-list');
+        expenseList.innerHTML = Object.entries(data.expenses)
+          .map(([category, expense]) => `<li>${category}: ${expense} DH</li>`)
+          .join('');
+        document.getElementById('total-expenses').textContent = `Total Expenses: ${data.total_expenses} DH`;
+        document.getElementById('remaining-balance').textContent = `Remaining Balance: ${data.remaining_balance} DH`;
+      } else {
+        alert('An error occurred while predicting expenses.');
+      }
+    });
+
+    function reloadForm() {
+      document.getElementById('form-section').classList.remove('hidden');
+        document.getElementById('title').classList.remove('hidden');
+      document.getElementById('results-section').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
