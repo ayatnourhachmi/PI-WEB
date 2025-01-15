@@ -77,7 +77,7 @@ def predict_region(salaire, family_status):
     """
     try:
         # Load the dataset
-        data = pd.read_excel('Balanced_Situation_Familiale_Data.xlsx')
+        data = pd.read_excel('./data/updated_responses.xlsx')
 
         # Preprocess the dataset
         data['Situation Familiale'] = data['Situation Familiale'].apply(clean_family_status_QDA)
