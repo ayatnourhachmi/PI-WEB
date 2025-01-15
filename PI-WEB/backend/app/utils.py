@@ -36,39 +36,56 @@ def clean_family_status(family_status):
     return mapping.get(family_status.strip().title(), 'Other')  # Default to 'Other'
 
 
+def convert_currency_to_avg_QDA(value):
+    """
+    Convert monetary values into floating-point averages.
+    Handles ranges (e.g., "500-1000") and non-numeric characters (e.g., "500dh").
+    """
+    if isinstance(value, str):
+        value = value.lower().replace('dh', '').strip()
+        if '-' in value:  # Handle ranges like "0-2500"
+            low, high = map(float, value.split('-'))
+            return (low + high) / 2
+        try:
+            return float(value)
+        except ValueError:
+            return 0.0  # Default to 0.0 if conversion fails
+    return value
+
+def clean_family_status_QDA(family_status):
+    """
+    Normalize family status into consistent categories.
+    """
+    mapping = {
+        'Marié': 'Married',
+        'Mariée': 'Married',
+        'Célibataire': 'Single',
+        'Divorcé': 'Single',
+        'Divorcée': 'Single',
+        'Single': 'Single',
+        'Married': 'Married'
+    }
+    result = mapping.get(family_status.strip(), None)
+    if result is None:
+        raise ValueError(f"Invalid family status: {family_status}. Must be 'Single' or 'Married'.")
+    return result
 
 def predict_region(salaire, family_status):
-
     """
     Predict the most suitable region based on salary and family status.
+    Randomly selects a region weighted by probabilities.
     """
     try:
         # Load the dataset
-        data = pd.read_excel('./data/updated_responses.xlsx')
+        data = pd.read_excel('Balanced_Situation_Familiale_Data.xlsx')
 
-        # Debug: Print column names
-        print("Columns in the dataset:", data.columns.tolist())
+        # Preprocess the dataset
+        data['Situation Familiale'] = data['Situation Familiale'].apply(clean_family_status_QDA)
+        family_status = clean_family_status_QDA(family_status)  # Clean input as well
+        data['Salaire (DH)'] = data['Salaire (DH)'].apply(convert_currency_to_avg_QDA)
 
-        # Ensure the necessary columns exist
-        required_columns = ['Salaire (DH)', 'Région', 'Situation Familiale']
-        for col in required_columns:
-            if col not in data.columns:
-                raise ValueError(f"Missing required column: {col}")
-
-        # Debug: Check for missing values
-        print("Missing values in required columns:", data[required_columns].isnull().sum())
-
-        # Handle missing values
-        data = data.dropna(subset=required_columns)
-
-        # Clean the 'Situation Familiale' column
-        data['Situation Familiale'] = data['Situation Familiale'].apply(clean_family_status)
-
-        # Normalize input for family status
-        family_status = clean_family_status(family_status)  # Clean the input as well
-
-        # Convert salary to numeric
-        data['Salaire (DH)'] = data['Salaire (DH)'].apply(convert_currency_to_avg)
+        # Drop rows with missing essential values
+        data = data.dropna(subset=['Salaire (DH)', 'Région', 'Situation Familiale'])
 
         # Encode categorical family status
         label_encoder = LabelEncoder()
@@ -78,24 +95,44 @@ def predict_region(salaire, family_status):
         features = data[['Salaire (DH)', 'Family Status Encoded']]
         target = data['Région']
 
-        print(data.head())  # Debug: Print the first few rows after cleaning
+        # Balance the dataset
+        majority_class = data['Région'].value_counts().idxmax()
+        max_count = data['Région'].value_counts().max()
+        data_balanced = data.copy()
+
+        for region in data['Région'].unique():
+            region_data = data[data['Région'] == region]
+            if len(region_data) < max_count:
+                region_data_upsampled = resample(region_data, replace=True, n_samples=max_count, random_state=42)
+                data_balanced = pd.concat([data_balanced, region_data_upsampled])
+
+        # Scale features
+        scaler = StandardScaler()
+        features_scaled = scaler.fit_transform(data_balanced[['Salaire (DH)', 'Family Status Encoded']])
 
         # Split data into train and test sets
-        X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.3, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(features_scaled, data_balanced['Région'], test_size=0.3, random_state=42)
 
-        # Train a QDA model
-        qda = QuadraticDiscriminantAnalysis()
+        # Train the QDA model
+        qda = QuadraticDiscriminantAnalysis(reg_param=0.1)
         qda.fit(X_train, y_train)
 
         # Encode the input family status
         family_status_encoded = label_encoder.transform([family_status])[0]
 
-        # Predict the region
-        input_data = np.array([[salaire, family_status_encoded]])
-        predicted_region = qda.predict(input_data)
+        # Predict probabilities for the input
+        input_data = scaler.transform([[salaire, family_status_encoded]])
+        probabilities = qda.predict_proba(input_data)[0]
 
-        return predicted_region[0]
+        # Randomly select a region weighted by probabilities
+        regions = qda.classes_
+        predicted_region = random.choices(regions, weights=probabilities, k=1)[0]
 
+        return predicted_region
+
+    except ValueError as ve:
+        print(f"[ERROR] {str(ve)}")
+        raise
     except Exception as e:
         print(f"[ERROR] {str(e)}")
         raise
